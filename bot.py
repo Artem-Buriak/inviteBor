@@ -107,11 +107,36 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Parses the CallbackQuery and updates the message text."""
     query = update.callback_query
+    user = query.from_user
     await query.answer()
 
-    if query.data in ["attend_yes", "attend_no"]:
+    if query.data == "attend_yes":
+        # Notify the admin
+        admin_chat_id = os.getenv("ADMIN_CHAT_ID")
+        if admin_chat_id:
+            user_info = f"✅ Новий гість!\n\n"
+            user_info += f"Ім'я: {user.first_name}\n"
+            if user.last_name:
+                user_info += f"Прізвище: {user.last_name}\n"
+            if user.username:
+                user_info += f"Username: @{user.username}\n"
+            user_info += f"ID: {user.id}"
+            
+            try:
+                await context.bot.send_message(chat_id=admin_chat_id, text=user_info)
+            except Exception as e:
+                logger.error(f"Failed to send notification to admin: {e}")
+
+        # Respond to the user
         await query.edit_message_text(text="Дякуємо за відповідь! Тепер ти можеш скористатись меню нижче, щоб дізнатися більше про наше свято ❤️")
         await main_menu(update, context)
+
+    elif query.data == "attend_no":
+        # Just respond to the user
+        await query.edit_message_text(text="Дякуємо за відповідь! Нам буде шкода, якщо тебе не буде, але ми поважаємо твоє рішення ❤️")
+        # You could also send a notification for "No" answers if you want
+        # await main_menu(update, context) # Optionally show menu
+
     elif query.data == "main_menu":
         await main_menu(update, context, edit_message=True)
     elif query.data == "location":
