@@ -36,6 +36,12 @@ WELCOME_TEXT = """
 👉 Чи зможеш бути з нами в цей особливий день?
 """
 
+REGRET_TEXT = """
+Шкода, що не вийде побачитись у цей день 😔
+Але ми все одно дуууже раді, що ви є в нашому житті і ми обов'язково побачимось пізніше, щоб відсвяткувати наше весілля 💛
+"""
+
+
 LOCATION_TEXT = """
 🔹 *Локація*
 – *Назва:* Relax Resort
@@ -66,7 +72,7 @@ TRANSPORT_TEXT = """
 
 DRESS_CODE_TEXT = """
 🔹 *Дрес-код*
-Ми вирішили не встановлювати строгих правил у стилі "бузкова сорочка й сукня кольору марсала" 🙃
+Ми вирішили не встановлювати суворих правил у стилі "бузкова сорочка й сукня кольору марсала" 🙃
 
 Ніякого офіційного дрес-коду немає.
 Просто оберіть образ, у якому вам буде комфортно, красиво й святково.
@@ -110,16 +116,26 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = query.from_user
     await query.answer()
 
+    # Store the main menu message id if it's not already stored
+    if 'main_menu_message_id' not in context.user_data:
+        if query.message:
+            context.user_data['main_menu_message_id'] = query.message.message_id
+
     if query.data == "attend_yes":
         # Notify the admin
         admin_chat_id = os.getenv("ADMIN_CHAT_ID")
         if admin_chat_id:
-            user_info = f"✅ Новий гість!\n\n"
-            user_info += f"Ім'я: {user.first_name}\n"
+            user_info = f"✅ Новий гість!
+
+"
+            user_info += f"Ім'я: {user.first_name}
+"
             if user.last_name:
-                user_info += f"Прізвище: {user.last_name}\n"
+                user_info += f"Прізвище: {user.last_name}
+"
             if user.username:
-                user_info += f"Username: @{user.username}\n"
+                user_info += f"Username: @{user.username}
+"
             user_info += f"ID: {user.id}"
             
             try:
@@ -127,52 +143,106 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception as e:
                 logger.error(f"Failed to send notification to admin: {e}")
 
-        # Respond to the user
+        # Respond to the user and show the main menu
         await query.edit_message_text(text="Дякуємо за відповідь! Тепер ти можеш скористатись меню нижче, щоб дізнатися більше про наше свято ❤️")
         await main_menu(update, context)
 
     elif query.data == "attend_no":
+        # Notify the admin
+        admin_chat_id = os.getenv("ADMIN_CHAT_ID")
+        if admin_chat_id:
+            user_info = f"❌ На жаль, гість не зможе бути присутнім
+
+"
+            user_info += f"Ім'я: {user.first_name}
+"
+            if user.last_name:
+                user_info += f"Прізвище: {user.last_name}
+"
+            if user.username:
+                user_info += f"Username: @{user.username}
+"
+            user_info += f"ID: {user.id}"
+
+            try:
+                await context.bot.send_message(chat_id=admin_chat_id, text=user_info)
+            except Exception as e:
+                logger.error(f"Failed to send notification to admin: {e}")
         # Just respond to the user
-        await query.edit_message_text(text="Дякуємо за відповідь! Нам буде шкода, якщо тебе не буде, але ми поважаємо твоє рішення ❤️")
-        # You could also send a notification for "No" answers if you want
-        # await main_menu(update, context) # Optionally show menu
+        await query.edit_message_text(text=REGRET_TEXT)
 
     elif query.data == "main_menu":
+        # Delete the details message and show the main menu
+        if 'details_message_id' in context.user_data:
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=context.user_data['details_message_id'])
+            except Exception as e:
+                logger.error(f"Failed to delete details message: {e}")
         await main_menu(update, context, edit_message=True)
-    elif query.data == "location":
-        await query.edit_message_text(text=LOCATION_TEXT, reply_markup=back_to_menu_keyboard(), parse_mode='Markdown')
-    elif query.data == "timing":
-        await query.edit_message_text(text=TIMING_TEXT, reply_markup=back_to_menu_keyboard(), parse_mode='Markdown')
-    elif query.data == "transport":
-        await query.edit_message_text(text=TRANSPORT_TEXT, reply_markup=back_to_menu_keyboard(), parse_mode='Markdown')
-    elif query.data == "dress_code":
-        await query.edit_message_text(text=DRESS_CODE_TEXT, reply_markup=back_to_menu_keyboard(), parse_mode='Markdown')
-    elif query.data == "gifts":
-        await query.edit_message_text(text=GIFTS_TEXT, reply_markup=back_to_menu_keyboard(), parse_mode='Markdown')
-    elif query.data == "guest_chat":
+
+    else:
+        # For other buttons, send a new message with details
+        text, reply_markup = get_details(query.data)
+        if text:
+            details_message = await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+            context.user_data['details_message_id'] = details_message.message_id
+            # Hide the main menu
+            if 'main_menu_message_id' in context.user_data:
+                 await context.bot.edit_message_reply_markup(chat_id=update.effective_chat.id, message_id=context.user_data['main_menu_message_id'], reply_markup=None)
+
+
+def get_details(data):
+    """Returns the text and keyboard for a given detail."""
+    text = ""
+    reply_markup = back_to_menu_keyboard()
+
+    if data == "location":
+        text = LOCATION_TEXT
+    elif data == "timing":
+        text = TIMING_TEXT
+    elif data == "transport":
+        text = TRANSPORT_TEXT
+    elif data == "dress_code":
+        text = DRESS_CODE_TEXT
+    elif data == "gifts":
+        text = GIFTS_TEXT
+    elif data == "guest_chat":
+        text = GUEST_CHAT_TEXT
         keyboard = [
             [InlineKeyboardButton("Приєднатись до чату", url="https://t.me/+HAdohx3VjvRmZjQy")],
             [InlineKeyboardButton("⬅️ Повернутись у головне меню", callback_data="main_menu")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(text=GUEST_CHAT_TEXT, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    return text, reply_markup
 
 
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_message: bool = False) -> None:
     """Displays the main menu."""
     keyboard = [
-        [InlineKeyboardButton("Локація", callback_data="location"),InlineKeyboardButton("Таймінг", callback_data="timing")],
-        [InlineKeyboardButton("Транспорт", callback_data="transport"),InlineKeyboardButton("Дрес-код", callback_data="dress_code")],
-        [InlineKeyboardButton("Подарунки", callback_data="gifts"),InlineKeyboardButton("Чат з гостями", callback_data="guest_chat")]
+        [InlineKeyboardButton("📍 Локація", callback_data="location"), InlineKeyboardButton("🕓 Таймінг", callback_data="timing")],
+        [InlineKeyboardButton("🚖 Транспорт", callback_data="transport"), InlineKeyboardButton("💃🏼 Дрес-код", callback_data="dress_code")],
+        [InlineKeyboardButton("💸 Подарунки", callback_data="gifts"), InlineKeyboardButton("💌 Чат з гостями", callback_data="guest_chat")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # If we are editing a message, use query.edit_message_text
+    menu_text = "Оберіть, що вас цікавить:"
+
     if edit_message and update.callback_query:
-        await update.callback_query.edit_message_text("Оберіть, що вас цікавить:", reply_markup=reply_markup)
-    # Otherwise, send a new message
+        try:
+            await update.callback_query.edit_message_text(menu_text, reply_markup=reply_markup)
+            context.user_data['main_menu_message_id'] = update.callback_query.message.message_id
+        except Exception as e:
+            logger.error(f"Failed to edit main menu message: {e}")
     else:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text="Оберіть, що вас цікавить:", reply_markup=reply_markup)
+        menu_message = await context.bot.send_message(chat_id=update.effective_chat.id, text=menu_text, reply_markup=reply_markup)
+        context.user_data['main_menu_message_id'] = menu_message.message_id
+
 
 
 def back_to_menu_keyboard():
