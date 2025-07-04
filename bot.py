@@ -125,17 +125,17 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Notify the admin
         admin_chat_id = os.getenv("ADMIN_CHAT_ID")
         if admin_chat_id:
-            user_info = f"✅ Новий гість!
+            user_info = f"""✅ Новий гість!
 
-"
-            user_info += f"Ім'я: {user.first_name}
-"
+"""
+            user_info += f"""Ім'я: {user.first_name}
+"""
             if user.last_name:
-                user_info += f"Прізвище: {user.last_name}
-"
+                user_info += f"""Прізвище: {user.last_name}
+"""
             if user.username:
-                user_info += f"Username: @{user.username}
-"
+                user_info += f"""Username: @{user.username}
+"""
             user_info += f"ID: {user.id}"
             
             try:
@@ -143,57 +143,57 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             except Exception as e:
                 logger.error(f"Failed to send notification to admin: {e}")
 
-        # Respond to the user and show the main menu
-        await query.edit_message_text(text="Дякуємо за відповідь! Тепер ти можеш скористатись меню нижче, щоб дізнатися більше про наше свято ❤️")
+        # Remove buttons from the original message
+        if query.message:
+            await query.edit_message_reply_markup(reply_markup=None)
+        
+        # Send a new confirmation message and the main menu
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="Дякуємо за відповідь! ❤️")
         await main_menu(update, context)
 
     elif query.data == "attend_no":
         # Notify the admin
         admin_chat_id = os.getenv("ADMIN_CHAT_ID")
         if admin_chat_id:
-            user_info = f"❌ На жаль, гість не зможе бути присутнім
+            user_info = f"""❌ На жаль, гість не зможе бути присутнім
 
-"
-            user_info += f"Ім'я: {user.first_name}
-"
+"""
+            user_info += f"""Ім'я: {user.first_name}
+"""
             if user.last_name:
-                user_info += f"Прізвище: {user.last_name}
-"
+                user_info += f"""Прізвище: {user.last_name}
+"""
             if user.username:
-                user_info += f"Username: @{user.username}
-"
+                user_info += f"""Username: @{user.username}
+"""
             user_info += f"ID: {user.id}"
 
             try:
                 await context.bot.send_message(chat_id=admin_chat_id, text=user_info)
             except Exception as e:
                 logger.error(f"Failed to send notification to admin: {e}")
-        # Just respond to the user
-        await query.edit_message_text(text=REGRET_TEXT)
+        
+        # Remove buttons from the original message and send a new one
+        if query.message:
+            await query.edit_message_reply_markup(reply_markup=None)
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=REGRET_TEXT)
 
     elif query.data == "main_menu":
-        # Delete the details message and show the main menu
-        if 'details_message_id' in context.user_data:
-            try:
-                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=context.user_data['details_message_id'])
-            except Exception as e:
-                logger.error(f"Failed to delete details message: {e}")
+        # Edit the message to show the main menu
         await main_menu(update, context, edit_message=True)
 
     else:
-        # For other buttons, send a new message with details
+        # For other buttons, edit the message to show details
         text, reply_markup = get_details(query.data)
-        if text:
-            details_message = await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=text,
-                reply_markup=reply_markup,
-                parse_mode='Markdown'
-            )
-            context.user_data['details_message_id'] = details_message.message_id
-            # Hide the main menu
-            if 'main_menu_message_id' in context.user_data:
-                 await context.bot.edit_message_reply_markup(chat_id=update.effective_chat.id, message_id=context.user_data['main_menu_message_id'], reply_markup=None)
+        if text and query.message:
+            try:
+                await query.edit_message_text(
+                    text=text,
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            except Exception as e:
+                logger.error(f"Failed to edit message to show details: {e}")
 
 
 def get_details(data):
